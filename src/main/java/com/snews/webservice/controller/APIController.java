@@ -89,14 +89,6 @@ public class APIController {
 		this.storageService = storageService;
 	}
 
-	private static Calendar cWithoutTime = Calendar.getInstance();
-	static {
-		cWithoutTime.set(Calendar.HOUR_OF_DAY, 0);
-		cWithoutTime.set(Calendar.MINUTE, 0);
-		cWithoutTime.set(Calendar.SECOND, 0);
-		cWithoutTime.set(Calendar.MILLISECOND, 0);
-	}
-
 	// #############################_Topic_##################################################
 	@GetMapping(path = "/topics")
 	public @ResponseBody Iterable<Topic> getAllTopics(@RequestParam(value = "_page") int page,
@@ -312,6 +304,26 @@ public class APIController {
 		}
 	}
 
+	@GetMapping(path = "/events/{id}/attendees/search")
+	public @ResponseBody List<Attendee> searchAttendeesInEvent(@PathVariable int id,
+			@RequestParam(value = "_page") int page, @RequestParam(value = "_limit") int limit,
+			@RequestParam(value = "_text") String search, HttpServletRequest req) {
+		AccountDTO you = getAccountMe(req);
+		Account own = eventRepository.findAccountByEventID(id);
+		if (own != null & you != null && you.getId() == own.getUId()) {
+			List<Attendee> attList = StreamSupport.stream(
+					eventRepository
+							.findAttendeeByEventIDAndSearchString(
+									PageRequest.of(page - 1, limit, new Sort(Sort.Direction.DESC, "id")), id, search)
+							.getContent().spliterator(), // 0
+					false).collect(Collectors.toList());
+			attList.forEach(e -> e.setEventId(id));
+			return attList;
+		} else {
+			return Collections.emptyList();
+		}
+	}
+
 	@RequestMapping(value = "/events/{id}/attendees/import", method = RequestMethod.POST)
 	public ResponseEntity<Progress> importAttendee(@PathVariable int id, @RequestParam("file") MultipartFile excel,
 			HttpServletRequest req) {
@@ -350,6 +362,13 @@ public class APIController {
 	public @ResponseBody ResponseEntity<Integer> getAttendeesCount(@PathVariable int id) {
 
 		return ResponseEntity.ok(eventRepository.countAttendeeByEventId(id));
+	}
+
+	@GetMapping(path = "/events/{id}/attendees/count/search")
+	public @ResponseBody ResponseEntity<Integer> getAttendeesCount(@PathVariable int id,
+			@RequestParam(value = "_text") String search) {
+
+		return ResponseEntity.ok(eventRepository.countAttendeeByEventIDAndSearchString(id, search));
 	}
 
 	@RequestMapping(path = "/events", method = RequestMethod.POST)
@@ -402,6 +421,7 @@ public class APIController {
 			return ResponseEntity.badRequest().body(0);
 		}
 	}
+
 	@RequestMapping(path = "/events/{id}/statistics", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<AttendeeStatistics> attendeeStatistics(@PathVariable int id, HttpServletRequest req) {
@@ -413,20 +433,22 @@ public class APIController {
 		return ResponseEntity.badRequest().build();
 
 	}
+
 	private AttendeeStatistics calculateAttendeeStatistics(Event evt) {
 		int present = 0, absent = 0, in = 0, out = 0;
-		for(Attendee a : evt.getAttendees()) {
-			if(a.isIn() && a.isOut())
+		for (Attendee a : evt.getAttendees()) {
+			if (a.isIn() && a.isOut())
 				present++;
-			else if(!a.isIn() && !a.isOut())
+			else if (!a.isIn() && !a.isOut())
 				absent++;
-			else if(a.isIn() && !a.isOut())
+			else if (a.isIn() && !a.isOut())
 				in++;
 			else
 				out++;
 		}
 		return new AttendeeStatistics(present, absent, in, out);
 	}
+
 	@RequestMapping(path = "/events/{id}/state", method = RequestMethod.GET)
 	@ResponseBody
 	public ResponseEntity<EventTimeState> eventState(@PathVariable int id, HttpServletRequest req) {
@@ -441,6 +463,12 @@ public class APIController {
 	}
 
 	private EventTimeState calculateEventState(Date evtDate, Date start, Date end, int Timeout) {
+		Calendar cWithoutTime = Calendar.getInstance();
+		cWithoutTime.set(Calendar.HOUR_OF_DAY, 0);
+		cWithoutTime.set(Calendar.MINUTE, 0);
+		cWithoutTime.set(Calendar.SECOND, 0);
+		cWithoutTime.set(Calendar.MILLISECOND, 0);
+
 		Date today = cWithoutTime.getTime();
 		EventTimeState state = new EventTimeState();
 		state.setCompareTodayDate(evtDate.compareTo(today));
@@ -522,6 +550,12 @@ public class APIController {
 			dto.setError(true);
 			dto.setErrorTime("giờ kết thúc phải sau giờ bắt đầu");
 		}
+		Calendar cWithoutTime = Calendar.getInstance();
+		cWithoutTime.set(Calendar.HOUR_OF_DAY, 0);
+		cWithoutTime.set(Calendar.MINUTE, 0);
+		cWithoutTime.set(Calendar.SECOND, 0);
+		cWithoutTime.set(Calendar.MILLISECOND, 0);
+
 		Date today = cWithoutTime.getTime();
 		if (dto.getDate().compareTo(today) < 0) {
 			dto.setError(true);
@@ -551,6 +585,7 @@ public class APIController {
 		if (!dto.isError()) {
 			int ownId = acc.getUId();
 			dto.setOwnId(ownId);
+			
 			Attendee newAtt = attendeeRepository.save(dto);
 
 			int evtId = dto.getEventId();

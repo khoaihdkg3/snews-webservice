@@ -27,4 +27,11 @@ public interface EventRepository extends CrudRepository<Event, Integer> {
 	
 	@Query("SELECT e.attendees FROM Event e where e.id = :id")
 	Page<Attendee> findAttendeeByEventID(Pageable pageable, @Param("id") int id);
+	
+	@Query("select a from Event e join e.attendees a where e.id = :id and a.searchString LIKE '%' || :str || '%' ")
+	Page<Attendee> findAttendeeByEventIDAndSearchString(Pageable pageable, @Param("id") int id, @Param("str") String search);
+	
+	@Query("select count(a) from Event e join e.attendees a where e.id = :id and a.searchString LIKE '%' || :str || '%' ")
+	Integer countAttendeeByEventIDAndSearchString(@Param("id") int id, @Param("str") String search);
+	
 }
