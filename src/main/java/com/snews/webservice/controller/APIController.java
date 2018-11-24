@@ -21,6 +21,7 @@ import org.springframework.core.env.Environment;
 import org.springframework.core.io.Resource;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
@@ -65,6 +66,8 @@ public class APIController {
 	private LabelInfoRepository labelInfoRepository;
 	@Autowired
 	private PaginationRepository paginationRepository;
+	@Autowired
+	private RecruitmentRepository recruitmentRepository;
 	@Autowired
 	private RoleRepository roleRepository;
 	@Autowired
@@ -135,6 +138,70 @@ public class APIController {
 
 	private boolean existsTopicID(int ID) {
 		return ID != 0 & topicRepository.existsById(ID);
+	}
+
+	// #############################_Recruitment_##################################################
+	@GetMapping(path = "/recruitments")
+	public @ResponseBody List<Recruitment> getAllRecruitment(@RequestParam(value = "_page") int page,
+			@RequestParam(value = "_limit") int limit) {
+		return recruitmentRepository.findAllByPage(PageRequest.of(page - 1, limit, new Sort(Sort.Direction.DESC, "id")))
+				.getContent();
+	}
+	@GetMapping(path = "/recruitments/field")
+	public @ResponseBody List<String> getAllField() {
+		return recruitmentRepository.findAllField();
+	}
+	@GetMapping(path = "/recruitments/company")
+	public @ResponseBody List<String> getAllCompany() {
+		return recruitmentRepository.findAllCompany();
+	}
+	@GetMapping(path = "/recruitments/vacancy")
+	public @ResponseBody List<String> getAllVacancy() {
+		return recruitmentRepository.findAllVacancy();
+	}
+	@GetMapping(path = "/recruitments/field/totalup")
+	public @ResponseBody List<RecruitmentStatistics> totalUpField(@RequestParam(value = "_start") @DateTimeFormat(pattern="yyyy-MM-dd") Date start,
+			@RequestParam(value = "_end") @DateTimeFormat(pattern="yyyy-MM-dd") Date end) {
+		return recruitmentRepository.totalUpByField(start, end);
+	}
+	@GetMapping(path = "/recruitments/{id}")
+	public @ResponseBody Recruitment getRecruitment(@PathVariable int id) {
+		return recruitmentRepository.findById(id).get();
+	}
+
+	@RequestMapping(path = "/recruitments", method = RequestMethod.POST)
+	@ResponseBody
+	public ResponseEntity<Recruitment> addRecruitment(@RequestBody Recruitment recrmt, HttpServletRequest req) {
+		Account account = getAccountByCurrentToken(req);
+		recrmt.setAccount(account);
+		recrmt.setdate(new Date());
+		Recruitment newRecrmtc = recruitmentRepository.save(recrmt);
+		return ResponseEntity.ok(newRecrmtc);
+	}
+
+	@RequestMapping(path = "/recruitments/{id}", method = RequestMethod.DELETE)
+	@ResponseBody
+	public ResponseEntity<Integer> deleteRecruitment(@PathVariable int id) {
+		recruitmentRepository.deleteById(id);
+		return ResponseEntity.ok(id);
+	}
+
+	@RequestMapping(path = "/recruitments/{id}", method = RequestMethod.PUT)
+	@ResponseBody
+	public ResponseEntity<Recruitment> editRecruitment(@PathVariable int id, @RequestBody Recruitment recrmt) {
+		if (existsRecruitmentID(id)) {
+			recrmt.setId(id);
+			Account account = recruitmentRepository.findById(id).get().getAccount();
+			recrmt.setAccount(account);
+			Recruitment newRecrmt = recruitmentRepository.save(recrmt);
+			return ResponseEntity.ok(newRecrmt);
+		} else {
+			return ResponseEntity.notFound().build();
+		}
+	}
+
+	private boolean existsRecruitmentID(int ID) {
+		return ID != 0 & recruitmentRepository.existsById(ID);
 	}
 
 	// #############################_Account_##################################################
@@ -585,7 +652,7 @@ public class APIController {
 		if (!dto.isError()) {
 			int ownId = acc.getUId();
 			dto.setOwnId(ownId);
-			
+
 			Attendee newAtt = attendeeRepository.save(dto);
 
 			int evtId = dto.getEventId();
